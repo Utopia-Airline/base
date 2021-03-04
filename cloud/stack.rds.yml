@@ -1,0 +1,19 @@
+Resources:
+  UtopiaRDS:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+        DBName: "utopiadb"
+        DBInstanceIdentifier: "utopia-db"
+        Engine: MySQL
+        MasterUsername: admin
+        MasterUserPassword: password
+        DBInstanceClass: db.t2.micro
+        AllocatedStorage: '5'
+        PubliclyAccessible: true
+        VPCSecurityGroups:
+            - sg-05c329bea57a8d257
+Outputs:
+  Address:
+    Value: !GetAtt UtopiaRDS.Endpoint.Address
+    Export:
+      Name: RDSEndpoint

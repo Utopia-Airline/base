@@ -1,0 +1,116 @@
+HTTPlistener:
+  Type: "AWS::ElasticLoadBalancingV2::Listener"
+  Properties:
+    DefaultActions:
+      - Type: "redirect"
+        RedirectConfig:
+          Protocol: "HTTPS"
+          Port: 443
+          Host: "#{host}"
+          Path: "/#{path}"
+          Query: "#{query}"
+          StatusCode: "HTTP_301"
+    LoadBalancerArn: !Ref myLoadBalancer
+    Port: 80
+    Protocol: "HTTP"
+
+Type: AWS::ElasticLoadBalancingV2::TargetGroup
+Properties:
+  HealthCheckEnabled: Boolean
+  HealthCheckIntervalSeconds: Integer
+  HealthCheckPath: String
+  HealthCheckPort: String
+  HealthCheckProtocol: String
+  HealthCheckTimeoutSeconds: Integer
+  HealthyThresholdCount: Integer
+  Matcher: Matcher
+  Name: String
+  Port: Integer
+  Protocol: String
+  Tags:
+    - Tag
+  TargetGroupAttributes:
+    - TargetGroupAttribute
+  Targets:
+    - TargetDescription
+  TargetType: String
+  UnhealthyThresholdCount: Integer
+  VpcId: String
+
+  # Properties validation failed for resource
+  # BookingListenerRule with message:
+  # #: extraneous key [TargetGroupArn]
+  # is not permitted #: extraneous key
+  # [LoadBalancerArn] is not permitted #:
+  # extraneous key [Port] is not permitted #:
+  #  extraneous key [Protocol] is not permitted
+  #  #/Conditions/0/Values: expected type: JSONArray, found: String
+# The following resource(s) failed to delete: [BookingTG, bookingRepository].
+# Resource of type 'AWS::ECR::Repository' with identifier 'booking' already exists.
+
+  ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+      TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: tcp
+      Priority: 1
+      Conditions:
+        - Field: path-pattern
+          Values: "/*"
+      ListenerArn: !Ref Listener
+
+  ListenerRule1:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup1
+      Conditions:
+        - Field: http-header
+          HttpHeaderConfig:
+            HttpHeaderName: User-Agent
+            Values:
+              - Mozilla
+        - Field: http-header
+          HttpHeaderConfig:
+            HttpHeaderName: Referer
+            Values:
+              - "https://www.amazon.com/"
+      ListenerArn: !Ref Listener
+      Priority: 1
+
+Environment:
+  - Name: "DB_HOST"
+    Value: "localhost"
+  - Name: "DB_USER"
+    Value: "utopia"
+  - Name: "DB_PASSWORD"
+    Value: "utopia"
+
+  ListenerRule1:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup1
+      Conditions:
+        - Field: http-header
+          HttpHeaderConfig:
+            HttpHeaderName: User-Agent
+            Values:
+              - Mozilla
+        - Field: http-header
+          HttpHeaderConfig:
+            HttpHeaderName: Referer
+            Values:
+              - 'https://www.amazon.com/'
+      ListenerArn: !Ref Listener
+      Priority: 1
+
+
+      # The following resource(s) failed to create: [UtopiaRDS]. Rollback requested by user.
+# DBSecurityGroup not found: mysql

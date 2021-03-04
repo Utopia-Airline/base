@@ -1,0 +1,215 @@
+# aws cloudformation create-stack --stack-name testutopia1 --template-body file://$PWD/stack.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ecr ecs alb"
+Resources:
+  bookingRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: "booking"
+  utopiaECS:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: "utopiaCluster"
+      ClusterSettings:
+        - Name: containerInsights
+          Value: disabled
+      CapacityProviders:
+        - FARGATE_SPOT
+        - FARGATE
+  utopiaALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+  
+      Subnets:
+        - "subnet-309a0757"
+        - "subnet-815f088e"
+        - "subnet-9ae3ced0"
+        - "subnet-9c9806c0"
+        - "subnet-ad6ecf93"
+        - "subnet-ca8119e4"
+      SecurityGroups:
+        - !Ref UtopiaSecurityGroup
+      LoadBalancerAttributes:
+        - Key: "access_logs.s3.enabled"
+          Value: "false"
+        - Key: "idle_timeout.timeout_seconds"
+          Value: "60"
+        - Key: "deletion_protection.enabled"
+          Value: "false"
+        - Key: "routing.http2.enabled"
+          Value: "true"
+        - Key: "routing.http.drop_invalid_header_fields.enabled"
+          Value: "false"
+        - Key: "routing.http.desync_mitigation_mode"
+          Value: "defensive"
+        - Key: "waf.fail_open.enabled"
+          Value: "false"
+  BookingListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref BookingTG
+      LoadBalancerArn: !Ref utopiaALB
+      Port: 3000
+      Protocol: HTTP
+  BookingListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref BookingTG
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref BookingTG
+                Weight: 1
+            TargetGroupStickinessConfig:
+              Enabled: false
+      Priority: 1
+      Conditions:
+        - Field: "path-pattern"
+          Values:
+            - "/*"
+      ListenerArn: !Ref BookingListener
+  BookingTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: "bookingTG"
+      VpcId: "vpc-0d17b977"
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: "/api/bookings"
+      Port: 80
+      Protocol: "HTTP"
+      HealthCheckPort: "traffic-port"
+      HealthCheckProtocol: "HTTP"
+      HealthCheckTimeoutSeconds: 5
+      UnhealthyThresholdCount: 2
+      TargetType: "ip"
+      Matcher:
+        HttpCode: "200"
+      HealthyThresholdCount: 5
+      HealthCheckEnabled: true
+      TargetGroupAttributes:
+        - Key: "stickiness.enabled"
+          Value: "false"
+        - Key: "deregistration_delay.timeout_seconds"
+          Value: "300"
+        - Key: "stickiness.app_cookie.cookie_name"
+          Value: ""
+        - Key: "stickiness.type"
+          Value: "lb_cookie"
+        - Key: "stickiness.lb_cookie.duration_seconds"
+          Value: "86400"
+        - Key: "slow_start.duration_seconds"
+          Value: "0"
+        - Key: "stickiness.app_cookie.duration_seconds"
+          Value: "86400"
+        - Key: "load_balancing.algorithm.type"
+          Value: "round_robin"
+
+  bookingTaskdefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: "bookingTD"
+      NetworkMode: "awsvpc"
+      RequiresCompatibilities:
+        - "FARGATE"
+      Cpu: "256"
+      Memory: "512"
+      ExecutionRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/ecsTaskExecutionRole"
+      ContainerDefinitions:
+        - Name: "booking-container"
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/booking:latest"
+          Cpu: 256
+          Memory: 512
+          Essential: true
+          PortMappings:
+            - ContainerPort: 3000
+              HostPort: 3000
+              Protocol: "tcp"
+
+  BookingService:
+    Type: AWS::ECS::Service
+    DependsOn: BookingListener
+    Properties:
+      ServiceName: "booking-service"
+      TaskDefinition: !Ref bookingTaskdefinition
+      Cluster: !Ref utopiaECS
+      LaunchType: "FARGATE"
+      PlatformVersion: "LATEST"
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: false
+          Rollback: false
+      DesiredCount: 1
+      SchedulingStrategy: "REPLICA"
+      HealthCheckGracePeriodSeconds: 60
+      LoadBalancers:
+        - ContainerName: "booking-container"
+          ContainerPort: 3000
+          # LoadBalancerName: !Ref utopiaALB
+          TargetGroupArn: !Ref BookingTG
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: "ENABLED"
+          SecurityGroups:
+            - !Ref UtopiaSecurityGroup
+          Subnets:
+            - "subnet-309a0757"
+            - "subnet-815f088e"
+            - "subnet-9ae3ced0"
+            - "subnet-9c9806c0"
+            - "subnet-ad6ecf93"
+            - "subnet-ca8119e4"
+  UtopiaSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: "Open up 22, 80, 443, 3000, 3001, 3002,8080, 8081"
+      GroupName: "utopiaALBSGCF"
+      VpcId: "vpc-0d17b977"
+      SecurityGroupIngress:
+        - CidrIp: "0.0.0.0/0"
+          FromPort: 80
+          IpProtocol: "tcp"
+          ToPort: 80
+        - CidrIpv6: "::/0"
+          FromPort: 80
+          IpProtocol: "tcp"
+          ToPort: 80
+        - CidrIp: "0.0.0.0/0"
+          FromPort: 3000
+          IpProtocol: "tcp"
+          ToPort: 3002
+        - CidrIpv6: "::/0"
+          FromPort: 3000
+          IpProtocol: "tcp"
+          ToPort: 3002
+        - CidrIp: "0.0.0.0/0"
+          FromPort: 22
+          IpProtocol: "tcp"
+          ToPort: 22
+        - CidrIpv6: "::/0"
+          FromPort: 22
+          IpProtocol: "tcp"
+          ToPort: 22
+        - CidrIp: "0.0.0.0/0"
+          FromPort: 443
+          IpProtocol: "tcp"
+          ToPort: 443
+        - CidrIpv6: "::/0"
+          FromPort: 443
+          IpProtocol: "tcp"
+          ToPort: 443
+        - CidrIp: "0.0.0.0/0"
+          FromPort: 8081
+          IpProtocol: "tcp"
+          ToPort: 8081
+        - CidrIpv6: "::/0"
+          FromPort: 8081
+          IpProtocol: "tcp"
+          ToPort: 8081
+      SecurityGroupEgress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "-1"

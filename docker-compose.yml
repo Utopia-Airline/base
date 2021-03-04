@@ -1,0 +1,118 @@
+version: "3"
+
+networks:
+  utopianet:
+
+services:
+  utopia-db:
+    image: utopia-db
+    build: ./database
+    container_name: utopia-db
+    environment:
+      - MYSQL_USER
+      - MYSQL_ROOT_PASSWORD
+      - MYSQL_DATABASE
+      - MYSQL_PASSWORD
+    networks:
+      utopianet:
+        aliases:
+          - utopia-db
+
+  utopia-auth:
+    image: utopia-auth
+    build: ./backend/authentication-microservice    
+    container_name: utopia-auth
+    # restart:
+    #   on-failure
+    depends_on:
+      - utopia-db
+    environment:
+      - DB_HOST
+      - DB_NAME
+      - DB_USER
+      - DB_PASSSWORD
+      - AUTH_JWT_PRIVATE_KEY
+      - AUTH_JWT_PUBLIC_KEY
+    ports:
+      - 8081:8081
+    networks:
+      utopianet:
+        aliases:
+          - utopia-auth
+  
+  utopia-booking:
+    image: utopia-booking
+    build: 
+      context: ./backend
+      dockerfile: booking.Dockerfile
+    container_name: utopia-booking
+    depends_on:
+      - utopia-db
+    environment:
+      - DB_HOST
+      - DB_NAME
+      - DB_USER
+      - DB_PASSSWORD
+      - AUTH_JWT_PRIVATE_KEY
+      - AUTH_JWT_PUBLIC_KEY
+    ports:
+      - 3000:3000
+    networks:
+      utopianet:
+        aliases:
+          - utopia-booking
+
+  utopia-flight:
+    image: utopia-flight
+    build: 
+      context: ./backend
+      dockerfile: flight.Dockerfile
+    container_name: utopia-flight
+    depends_on:
+      - utopia-db
+    environment:
+      - DB_HOST
+      - DB_NAME
+      - DB_USER
+      - DB_PASSSWORD
+      - AUTH_JWT_PRIVATE_KEY
+      - AUTH_JWT_PUBLIC_KEY
+    ports:
+      - 3001:3001
+    networks:
+      utopianet:
+        aliases:
+          - utopia-flight
+
+  utopia-airport:
+    image: utopia-airport
+    build: 
+      context: ./backend
+      dockerfile: airport.Dockerfile
+    container_name: utopia-airport
+    depends_on:
+      - utopia-db
+    environment:
+      - DB_HOST
+      - DB_NAME
+      - DB_USER
+      - DB_PASSSWORD
+      - AUTH_JWT_PRIVATE_KEY
+      - AUTH_JWT_PUBLIC_KEY
+    ports:
+      - 3002:3002
+    networks:
+      utopianet:
+        aliases:
+          - utopia-airport
+
+  utopia-admin:
+    image: utopia-admin
+    build: ./frontend/admin-client
+    container_name: utopia-admin
+    ports:
+      - 80:80
+    networks:
+      utopianet:
+        aliases:
+          - utopia-admin

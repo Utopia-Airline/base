@@ -1,0 +1,194 @@
+# aws cloudformation create-stack --stack-name utopiabase --template-body file://$PWD/base.yml 
+# aws cloudformation describe-stacks --query Stacks[].Outputs[*].[OutputKey,OutputValue] --output text
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Utopia airline base infstructure"
+Resources:
+  UtopiaRDS:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+        DBName: "utopia"
+        DBInstanceIdentifier: "utopiards"
+        Engine: MySQL
+        MasterUsername: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:username}}'
+        MasterUserPassword: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:password}}'
+        DBInstanceClass: db.t2.micro
+        AllocatedStorage: '5'
+        PubliclyAccessible: true
+        VPCSecurityGroups:
+            - !Ref RDSSecurityGroup
+
+  authRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: "auth"
+  bookingRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: "booking"
+  flightRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: "flight"
+  airportRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: "airport"
+  adminportalRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: "adminportal"
+  utopiaECS:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: "utopiaCluster"
+      ClusterSettings:
+        - Name: containerInsights
+          Value: disabled
+      CapacityProviders:
+        - FARGATE_SPOT
+        - FARGATE
+  utopiaALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: "utopiaALB"
+      Scheme: "internet-facing"
+      Type: "application"
+      IpAddressType: "ipv4"
+      Subnets:
+        - "subnet-309a0757"
+        - "subnet-815f088e"
+        - "subnet-9ae3ced0"
+        - "subnet-9c9806c0"
+        - "subnet-ad6ecf93"
+        - "subnet-ca8119e4"
+      SecurityGroups:
+        - !Ref UtopiaSecurityGroup
+      LoadBalancerAttributes:
+        - Key: "access_logs.s3.enabled"
+          Value: "false"
+        - Key: "idle_timeout.timeout_seconds"
+          Value: "60"
+        - Key: "deletion_protection.enabled"
+          Value: "false"
+        - Key: "routing.http2.enabled"
+          Value: "true"
+        - Key: "routing.http.drop_invalid_header_fields.enabled"
+          Value: "false"
+        - Key: "routing.http.desync_mitigation_mode"
+          Value: "defensive"
+        - Key: "waf.fail_open.enabled"
+          Value: "false"
+
+
+  UtopiaSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: "Open up 22, 80, 443, 3000, 3001, 3002,8080, 8081"
+      GroupName: "utopiaALBSGCF"
+      VpcId: "vpc-0d17b977"
+      SecurityGroupIngress:
+        - CidrIp: "0.0.0.0/0"
+          FromPort: 80
+          IpProtocol: "tcp"
+          ToPort: 80
+        - CidrIpv6: "::/0"
+          FromPort: 80
+          IpProtocol: "tcp"
+          ToPort: 80
+        - CidrIp: "0.0.0.0/0"
+          FromPort: 3000
+          IpProtocol: "tcp"
+          ToPort: 3002
+        - CidrIpv6: "::/0"
+          FromPort: 3000
+          IpProtocol: "tcp"
+          ToPort: 3002
+        - CidrIp: "0.0.0.0/0"
+          FromPort: 22
+          IpProtocol: "tcp"
+          ToPort: 22
+        - CidrIpv6: "::/0"
+          FromPort: 22
+          IpProtocol: "tcp"
+          ToPort: 22
+        - CidrIp: "0.0.0.0/0"
+          FromPort: 443
+          IpProtocol: "tcp"
+          ToPort: 443
+        - CidrIpv6: "::/0"
+          FromPort: 443
+          IpProtocol: "tcp"
+          ToPort: 443
+        - CidrIp: "0.0.0.0/0"
+          FromPort: 8081
+          IpProtocol: "tcp"
+          ToPort: 8081
+        - CidrIpv6: "::/0"
+          FromPort: 8081
+          IpProtocol: "tcp"
+          ToPort: 8081
+      SecurityGroupEgress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "-1"
+  RDSSecurityGroup:
+      Type: "AWS::EC2::SecurityGroup"
+      Properties:
+          GroupDescription: "Allows MySQL"
+          GroupName: "utopiaMySQL"
+          VpcId: "vpc-0d17b977"
+          SecurityGroupIngress: 
+            - 
+              CidrIp: "0.0.0.0/0"
+              FromPort: 3306
+              IpProtocol: "tcp"
+              ToPort: 3306
+            - 
+              CidrIpv6: "::/0"
+              FromPort: 3306
+              IpProtocol: "tcp"
+              ToPort: 3306
+          SecurityGroupEgress: 
+            - 
+              CidrIp: "0.0.0.0/0"
+              IpProtocol: "-1"
+Outputs:
+  RDS:
+    Value: !Ref UtopiaRDS
+    Export:
+      Name: UtopiaRDS
+  RDSEndpoint:
+    Value: !GetAtt UtopiaRDS.Endpoint.Address
+    Export:
+      Name: RDSEndpoint
+  UtopiaSecurityGroup:
+    Value: !Ref UtopiaSecurityGroup
+    Export:
+      Name: UtopiaSecurityGroup
+  AuthRepository:
+    Value: !Ref authRepository
+    Export:
+      Name: authRepository
+  BookingRepository:
+    Value: !Ref bookingRepository
+    Export:
+      Name: bookingRepository
+  FlightRepository:
+    Value: !Ref flightRepository
+    Export:
+      Name: flightRepository
+  AirportRepository:
+    Value: !Ref airportRepository
+    Export:
+      Name: airportRepository
+  UtopiaCluster:
+    Value: !Ref utopiaECS
+    Export:
+      Name: utopiaECS
+  utopiaALB:
+    Value: !Ref utopiaALB
+    Export:
+      Name: utopiaALB
+  ALBEndpoint:
+    Value: !GetAtt utopiaALB.DNSName
+    Export:
+      Name: ALBEndpoint  

@@ -1,0 +1,153 @@
+# aws cloudformation create-stack --stack-name utopiaAuth --template-body file://$PWD/auth.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ecr ecs alb"
+Resources:
+  authListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref authTG
+      LoadBalancerArn: 
+        Fn::ImportValue: utopiaALB
+      Port: 8081
+      Protocol: HTTP
+  authListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref authTG
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref authTG
+                Weight: 1
+            TargetGroupStickinessConfig:
+              Enabled: false
+      Priority: 1
+      Conditions:
+        - Field: "path-pattern"
+          Values:
+            - "/*"
+      ListenerArn: !Ref authListener
+  authTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: "authTG"
+      VpcId: "vpc-0d17b977"
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: "/api/session"
+      Port: 80
+      Protocol: "HTTP"
+      HealthCheckPort: "traffic-port"
+      HealthCheckProtocol: "HTTP"
+      HealthCheckTimeoutSeconds: 5
+      UnhealthyThresholdCount: 2
+      TargetType: "ip"
+      Matcher:
+        HttpCode: "200"
+      HealthyThresholdCount: 5
+      HealthCheckEnabled: true
+      TargetGroupAttributes:
+        - Key: "stickiness.enabled"
+          Value: "false"
+        - Key: "deregistration_delay.timeout_seconds"
+          Value: "300"
+        - Key: "stickiness.app_cookie.cookie_name"
+          Value: ""
+        - Key: "stickiness.type"
+          Value: "lb_cookie"
+        - Key: "stickiness.lb_cookie.duration_seconds"
+          Value: "86400"
+        - Key: "slow_start.duration_seconds"
+          Value: "0"
+        - Key: "stickiness.app_cookie.duration_seconds"
+          Value: "86400"
+        - Key: "load_balancing.algorithm.type"
+          Value: "round_robin"
+
+  authTaskdefinition:
+    Type: AWS::ECS::TaskDefinition
+    # DependsOn: 
+    #   Fn::ImportValue: UtopiaRDS
+    Properties:
+      NetworkMode: "awsvpc"
+      RequiresCompatibilities:
+        - "FARGATE"
+      Cpu: "256"
+      Memory: "512"
+      ExecutionRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/ecsTaskExecutionRole"
+      Family: "authTD"
+      ContainerDefinitions:
+        - Name: "auth-container"
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/auth:latest"
+          LogConfiguration: 
+            LogDriver: "awslogs"
+            Options: 
+              awslogs-group: "/ecs/authTD"
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: "ecs"
+          Cpu: 256
+          Memory: 512
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8081
+              HostPort: 8081
+              Protocol: "tcp"
+          Environment:
+            -
+              Name: "DB_HOST"
+              Value: 
+                Fn::ImportValue: RDSEndpoint
+            -
+              Name: "DB_USER"
+              Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:username}}'
+            -
+              Name: "DB_PASSWORD"
+              Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:password}}'
+            -
+              Name: "DB_NAME"
+              Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:db_name}}'
+            -
+              Name: "AUTH_JWT_PRIVATE_KEY"
+              Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:private_key}}'
+            -
+              Name: "AUTH_JWT_PUBLIC_KEY"
+              Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:public_key}}'
+
+
+  authService:
+    Type: AWS::ECS::Service
+    DependsOn: authListener
+    Properties:
+      ServiceName: "auth-service"
+      TaskDefinition: !Ref authTaskdefinition
+      Cluster: 
+        Fn::ImportValue: utopiaECS
+      LaunchType: "FARGATE"
+      PlatformVersion: "LATEST"
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: false
+          Rollback: false
+      DesiredCount: 1
+      SchedulingStrategy: "REPLICA"
+      HealthCheckGracePeriodSeconds: 60
+      LoadBalancers:
+        - ContainerName: "auth-container"
+          ContainerPort: 8081
+          TargetGroupArn: !Ref authTG
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: "ENABLED"
+          SecurityGroups:
+            - Fn::ImportValue: UtopiaSecurityGroup
+          Subnets:
+            - "subnet-309a0757"
+            - "subnet-815f088e"
+            - "subnet-9ae3ced0"
+            - "subnet-9c9806c0"
+            - "subnet-ad6ecf93"
+            - "subnet-ca8119e4"

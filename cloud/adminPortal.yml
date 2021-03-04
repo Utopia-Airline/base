@@ -1,0 +1,146 @@
+# aws cloudformation create-stack --stack-name utopiaadmin --template-body file://$PWD/adminPortal.yml
+# aws ecs update-service --cluster utopiaCluster --service admin-service --force-new-deployment 
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ecr ecs alb"
+Resources:
+  adminListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref adminTG
+      LoadBalancerArn: 
+        Fn::ImportValue: utopiaALB
+      Port: 80
+      Protocol: HTTP
+  adminListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref adminTG
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref adminTG
+                Weight: 1
+            TargetGroupStickinessConfig:
+              Enabled: false
+      Priority: 1
+      Conditions:
+        - Field: "path-pattern"
+          Values:
+            - "/*"
+      ListenerArn: !Ref adminListener
+  adminTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: "adminTG"
+      VpcId: "vpc-0d17b977"
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: "/"
+      Port: 80
+      Protocol: "HTTP"
+      HealthCheckPort: "traffic-port"
+      HealthCheckProtocol: "HTTP"
+      HealthCheckTimeoutSeconds: 5
+      UnhealthyThresholdCount: 2
+      TargetType: "ip"
+      Matcher:
+        HttpCode: "200"
+      HealthyThresholdCount: 5
+      HealthCheckEnabled: true
+      TargetGroupAttributes:
+        - Key: "stickiness.enabled"
+          Value: "false"
+        - Key: "deregistration_delay.timeout_seconds"
+          Value: "300"
+        - Key: "stickiness.app_cookie.cookie_name"
+          Value: ""
+        - Key: "stickiness.type"
+          Value: "lb_cookie"
+        - Key: "stickiness.lb_cookie.duration_seconds"
+          Value: "86400"
+        - Key: "slow_start.duration_seconds"
+          Value: "0"
+        - Key: "stickiness.app_cookie.duration_seconds"
+          Value: "86400"
+        - Key: "load_balancing.algorithm.type"
+          Value: "round_robin"
+
+  adminTaskdefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      NetworkMode: "awsvpc"
+      RequiresCompatibilities:
+        - "FARGATE"
+      Cpu: "256"
+      Memory: "512"
+      ExecutionRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/ecsTaskExecutionRole"
+      Family: "adminTD"
+      ContainerDefinitions:
+        - Name: "admin-container"
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/adminportal:latest"
+          LogConfiguration: 
+            LogDriver: "awslogs"
+            Options: 
+              awslogs-group: !Ref CloudWatchLogsGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: "ecs"
+          Cpu: 256
+          Memory: 512
+          Essential: true
+          PortMappings:
+            - ContainerPort: 80
+              HostPort: 80
+              Protocol: "tcp"
+    
+          Environment:
+            -
+              Name: "API_HOST"
+              Value: 
+                Fn::ImportValue: ALBEndpoint
+            -
+              Name: "API_PORT"
+              Value: "8081"
+              
+  adminService:
+    Type: AWS::ECS::Service
+    DependsOn: adminListener
+    Properties:
+      ServiceName: "admin-service"
+      TaskDefinition: !Ref adminTaskdefinition
+      Cluster: 
+        Fn::ImportValue: utopiaECS
+      LaunchType: "FARGATE"
+      PlatformVersion: "LATEST"
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: false
+          Rollback: false
+      DesiredCount: 1
+      SchedulingStrategy: "REPLICA"
+      HealthCheckGracePeriodSeconds: 60
+      LoadBalancers:
+        - ContainerName: "admin-container"
+          ContainerPort: 80
+          TargetGroupArn: !Ref adminTG
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: "ENABLED"
+          SecurityGroups:
+            - Fn::ImportValue: UtopiaSecurityGroup
+          Subnets:
+            - "subnet-309a0757"
+            - "subnet-815f088e"
+            - "subnet-9ae3ced0"
+            - "subnet-9c9806c0"
+            - "subnet-ad6ecf93"
+            - "subnet-ca8119e4"
+
+  CloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Ref AWS::StackName
+      RetentionInDays: 365

@@ -1,0 +1,33 @@
+pipeline {
+    agent any
+    stages {
+        stage('fetch'){
+            steps{
+                pwd()
+                git branch: 'UAW-162_CloudFront', url: 'https://github.com/popsps/utopia-airlines-ss.git'
+            }
+      
+        }
+        stage('build'){
+            steps{
+                sh "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 014285101692.dkr.ecr.us-east-1.amazonaws.com"
+                dir('./backend/auth') {
+                    sh "docker build -t auth ."
+                    sh "docker tag auth:latest 014285101692.dkr.ecr.us-east-1.amazonaws.com/auth:latest"
+                    sh "docker push 014285101692.dkr.ecr.us-east-1.amazonaws.com/auth:latest"
+                }
+                dir('./backend/node/bookings') {
+                    sh "docker build -t booking ."
+                    sh "docker tag booking:latest 014285101692.dkr.ecr.us-east-1.amazonaws.com/booking:latest"
+                    sh "docker push 014285101692.dkr.ecr.us-east-1.amazonaws.com/booking:latest"
+                }
+                dir('./frontend/admin-client') {
+                    sh "docker build -t adminportal ."
+                    sh "docker tag adminportal:latest 014285101692.dkr.ecr.us-east-1.amazonaws.com/adminportal:latest"
+                    sh "docker push 014285101692.dkr.ecr.us-east-1.amazonaws.com/adminportal:latest"
+                }                
+            }
+        }
+     
+    }
+}

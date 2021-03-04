@@ -1,0 +1,152 @@
+# aws cloudformation create-stack --stack-name utopiaBooking --template-body file://$PWD/booking.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ecr ecs alb"
+Resources:
+  bookingListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref bookingTG
+      LoadBalancerArn: 
+        Fn::ImportValue: utopiaALB
+      Port: 3000
+      Protocol: HTTP
+  bookingListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref bookingTG
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref bookingTG
+                Weight: 1
+            TargetGroupStickinessConfig:
+              Enabled: false
+      Priority: 1
+      Conditions:
+        - Field: "path-pattern"
+          Values:
+            - "/*"
+      ListenerArn: !Ref bookingListener
+  bookingTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: "bookingTG"
+      VpcId: "vpc-0d17b977"
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: "/api/bookings"
+      Port: 80
+      Protocol: "HTTP"
+      HealthCheckPort: "traffic-port"
+      HealthCheckProtocol: "HTTP"
+      HealthCheckTimeoutSeconds: 5
+      UnhealthyThresholdCount: 2
+      TargetType: "ip"
+      Matcher:
+        HttpCode: "200"
+      HealthyThresholdCount: 5
+      HealthCheckEnabled: true
+      TargetGroupAttributes:
+        - Key: "stickiness.enabled"
+          Value: "false"
+        - Key: "deregistration_delay.timeout_seconds"
+          Value: "300"
+        - Key: "stickiness.app_cookie.cookie_name"
+          Value: ""
+        - Key: "stickiness.type"
+          Value: "lb_cookie"
+        - Key: "stickiness.lb_cookie.duration_seconds"
+          Value: "86400"
+        - Key: "slow_start.duration_seconds"
+          Value: "0"
+        - Key: "stickiness.app_cookie.duration_seconds"
+          Value: "86400"
+        - Key: "load_balancing.algorithm.type"
+          Value: "round_robin"
+
+  bookingTaskdefinition:
+    Type: AWS::ECS::TaskDefinition
+    # DependsOn: 
+    #   Fn::ImportValue: UtopiaRDS
+    Properties:
+      Family: "bookingTD"
+      NetworkMode: "awsvpc"
+      RequiresCompatibilities:
+        - "FARGATE"
+      Cpu: "256"
+      Memory: "512"
+      ExecutionRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/ecsTaskExecutionRole"
+      ContainerDefinitions:
+        - Name: "booking-container"
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/booking:latest"
+          Cpu: 256
+          Memory: 512
+          Essential: true
+          PortMappings:
+            - ContainerPort: 3000
+              HostPort: 3000
+              Protocol: "tcp"
+          LogConfiguration: 
+            LogDriver: "awslogs"
+            Options: 
+              awslogs-group: "/ecs/bookingTD"
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: "ecs"
+          Environment:
+            -
+              Name: "DB_HOST"
+              Value: 
+                Fn::ImportValue: RDSEndpoint
+            -
+              Name: "DB_USERNAME"
+              Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:username}}'
+            -
+              Name: "DB_PASSWORD"
+              Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:password}}'
+            -
+              Name: "DB_NAME"
+              Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:db_name}}'
+            -
+              Name: "AUTH_JWT_PRIVATE_KEY"
+              Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:private_key}}'
+            -
+              Name: "AUTH_JWT_PUBLIC_KEY"
+              Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:public_key}}'
+
+  bookingService:
+    Type: AWS::ECS::Service
+    DependsOn: bookingListener
+    Properties:
+      ServiceName: "booking-service"
+      TaskDefinition: !Ref bookingTaskdefinition
+      Cluster: 
+        Fn::ImportValue: utopiaECS
+      LaunchType: "FARGATE"
+      PlatformVersion: "LATEST"
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: false
+          Rollback: false
+      DesiredCount: 1
+      SchedulingStrategy: "REPLICA"
+      HealthCheckGracePeriodSeconds: 60
+      LoadBalancers:
+        - ContainerName: "booking-container"
+          ContainerPort: 3000
+          TargetGroupArn: !Ref bookingTG
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: "ENABLED"
+          SecurityGroups:
+            - Fn::ImportValue: UtopiaSecurityGroup
+          Subnets:
+            - "subnet-309a0757"
+            - "subnet-815f088e"
+            - "subnet-9ae3ced0"
+            - "subnet-9c9806c0"
+            - "subnet-ad6ecf93"
+            - "subnet-ca8119e4"
