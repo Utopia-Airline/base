@@ -4,9 +4,8 @@ pipeline {
         stage('fetch'){
             steps{
                 pwd()
-                git branch: 'UAW-162_CloudFront', url: 'https://github.com/popsps/utopia-airlines-ss.git'
+                git branch: 'dev', url: 'https://github.com/Utopia-Airline/base.git'
             }
-      
         }
         stage('build'){
             steps{
@@ -28,6 +27,5 @@ pipeline {
                 }                
             }
         }
-     
     }
 }
