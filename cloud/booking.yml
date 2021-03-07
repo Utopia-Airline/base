@@ -35,9 +35,9 @@ Resources:
     Properties:
       Name: "bookingTG"
       VpcId: "vpc-0d17b977"
-      HealthCheckIntervalSeconds: 30
+      HealthCheckIntervalSeconds: 60
       HealthCheckPath: "/api/bookings"
-      Port: 80
+      Port: 3000
       Protocol: "HTTP"
       HealthCheckPort: "traffic-port"
       HealthCheckProtocol: "HTTP"
@@ -45,7 +45,7 @@ Resources:
       UnhealthyThresholdCount: 2
       TargetType: "ip"
       Matcher:
-        HttpCode: "200"
+        HttpCode: "401"
       HealthyThresholdCount: 5
       HealthCheckEnabled: true
       TargetGroupAttributes:

@@ -36,7 +36,7 @@ Resources:
     Properties:
       Name: "adminTG"
       VpcId: "vpc-0d17b977"
-      HealthCheckIntervalSeconds: 30
+      HealthCheckIntervalSeconds: 60
       HealthCheckPath: "/"
       Port: 80
       Protocol: "HTTP"

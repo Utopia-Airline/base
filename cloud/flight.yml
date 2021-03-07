@@ -1,3 +1,4 @@
+# aws cloudformation create-stack --stack-name utopiaFlight --template-body file://$PWD/flight.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "ecr ecs alb"
 Resources:
@@ -34,9 +35,9 @@ Resources:
     Properties:
       Name: "flightTG"
       VpcId: "vpc-0d17b977"
-      HealthCheckIntervalSeconds: 30
+      HealthCheckIntervalSeconds: 60
       HealthCheckPath: "/api/flights"
-      Port: 80
+      Port: 3001
       Protocol: "HTTP"
       HealthCheckPort: "traffic-port"
       HealthCheckProtocol: "HTTP"
