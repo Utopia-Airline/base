@@ -1,6 +1,6 @@
 # aws cloudformation create-stack --stack-name utopiaBooking --template-body file://$PWD/booking.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "ecr ecs alb"
+Description: "Booking microservice"
 Resources:
   bookingListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -45,7 +45,7 @@ Resources:
       UnhealthyThresholdCount: 2
       TargetType: "ip"
       Matcher:
-        HttpCode: "401"
+        HttpCode: "403"
       HealthyThresholdCount: 5
       HealthCheckEnabled: true
       TargetGroupAttributes:
@@ -100,7 +100,7 @@ Resources:
               Value: 
                 Fn::ImportValue: RDSEndpoint
             -
-              Name: "DB_USERNAME"
+              Name: "DB_USER"
               Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:username}}'
             -
               Name: "DB_PASSWORD"
@@ -109,11 +109,15 @@ Resources:
               Name: "DB_NAME"
               Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:db_name}}'
             -
-              Name: "AUTH_JWT_PRIVATE_KEY"
-              Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:private_key}}'
+              Name: "AUTH_ENDPOINT"
+              Value:
+                Fn::ImportValue: ALBEndpoint
             -
-              Name: "AUTH_JWT_PUBLIC_KEY"
-              Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:public_key}}'
+              Name: "AUTH_PORT"
+              Value: 8081
+            -
+              Name: "AUTH_SESSION"
+              Value: "api/session"
 
   bookingService:
     Type: AWS::ECS::Service
@@ -128,10 +132,10 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 100
-        # DeploymentCircuitBreaker:
-        #   Enable: false
-        #   Rollback: false
-      DesiredCount: 2
+        DeploymentCircuitBreaker:
+          Enable: false
+          Rollback: false
+      DesiredCount: 1
       SchedulingStrategy: "REPLICA"
       HealthCheckGracePeriodSeconds: 60
       LoadBalancers:
@@ -150,83 +154,3 @@ Resources:
             - "subnet-9c9806c0"
             - "subnet-ad6ecf93"
             - "subnet-ca8119e4"
-      Role: !Ref FRole
-      # ServiceRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.amazonaws.com/AWSCodeDeployRoleForECS"
-      # ExecutionRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.amazonaws.com/AWSServiceRoleForECS"
-      # ExecutionRoleArn: "arn:aws:iam::${AWS::AccountId}:role/ecsTaskExecutionRole"
-      # TaskRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.amazonaws.com/AWSCodeDeployRoleForECS"
-      DeploymentController: 
-          Type: "CODE_DEPLOY"
-
-  CodeDeployApplication:
-      Type: "AWS::CodeDeploy::Application"
-      Properties:
-          ApplicationName: !Sub "AppECS-utopiacluster-${bookingService.Name}"
-          ComputePlatform: "ECS"
-
-  ECSTaskSet:
-      Type: "AWS::ECS::TaskSet"
-      Properties:
-          Cluster: !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/utopiaCluster"
-          Service: !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${bookingService.Name}"
-          TaskDefinition: !Ref bookingTaskdefinition
-          LaunchType: "FARGATE"
-          PlatformVersion: "1.3.0"
-          NetworkConfiguration: 
-              AwsVpcConfiguration: 
-                  AssignPublicIp: "ENABLED"
-                  SecurityGroups: 
-                    - Fn::ImportValue: UtopiaSecurityGroup
-                  Subnets: 
-                    - "subnet-309a0757"
-                    - "subnet-815f088e"
-                    - "subnet-9ae3ced0"
-                    - "subnet-9c9806c0"
-                    - "subnet-ad6ecf93"
-                    - "subnet-ca8119e4"
-          LoadBalancers: 
-            - 
-              TargetGroupArn: !Ref bookingTG
-              ContainerName: "booking-container"
-              ContainerPort: 3000
-          Scale: 
-              Value: 100
-              Unit: "PERCENT"
-
-  ECSPrimaryTaskSet:
-      Type: "AWS::ECS::PrimaryTaskSet"
-      Properties:
-          Cluster: !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/utopiaCluster"
-          Service: !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${bookingService.Name}"
-          TaskSetId: !Ref ECSTaskSet
-
-  FRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2008-10-17
-        Statement:
-          - Sid: ''
-            Effect: Allow
-            Principal:
-              Service: ecs.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AWSCodeDeployRoleForECS'
-  # ECSServiceRole:
-  #   Type: AWS::IAM::Role
-  #   Properties:
-  #     Path: /
-  #     AssumeRolePolicyDocument:
-  #       Statement:
-  #       - Effect: Allow
-  #         Principal:
-  #           Service: [ecs.amazonaws.com]
-  #         Action: ['sts:AssumeRole']
-  #     ManagedPolicyArns:
-  #       - arn:aws:iam::aws:policy/service-role/AWSServiceRoleForECS
-  # EcsServiceLinkedRole:
-  # Type: "AWS::IAM::ServiceLinkedRole"
-  # Properties:
-  #   AWSServiceName: "ecs.amazonaws.com"
-  #   Description: "Role to enable Amazon ECS to manage your cluster."

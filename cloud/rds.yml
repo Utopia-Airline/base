@@ -1,6 +1,6 @@
-# aws cloudformation create-stack --stack-name utopiaRds--template-body file://$PWD/rds.yml 
+# aws cloudformation create-stack --stack-name utopiaRds --template-body file://$PWD/rds.yml 
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Utopia airline base infstructure"
+Description: "Utopia airline RDS mysql database"
 Resources:
   UtopiaRDS:
     Type: 'AWS::RDS::DBInstance'
