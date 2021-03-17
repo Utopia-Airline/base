@@ -1,0 +1,14 @@
+# aws cloudformation create-stack --stack-name utopiapipeline --template-body file://$PWD/pipeline.yml 
+Resources:
+  UtopiaPipeline:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      AvailabilityZone: us-east-1a
+      ImageId: ami-0085dfb57b5db93bf
+      InstanceType: t2.medium
+      SecurityGroups:
+        - Website-access
+      KeyName: swe64500
+      Tags:
+        - Key: Name
+          Value: utopia-pipeline

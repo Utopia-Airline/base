@@ -1,6 +1,6 @@
 # aws cloudformation create-stack --stack-name utopiaBooking --template-body file://$PWD/booking.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "ecr ecs alb"
+Description: "Booking microservice"
 Resources:
   bookingListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -45,7 +45,7 @@ Resources:
       UnhealthyThresholdCount: 2
       TargetType: "ip"
       Matcher:
-        HttpCode: "401"
+        HttpCode: "403"
       HealthyThresholdCount: 5
       HealthCheckEnabled: true
       TargetGroupAttributes:
@@ -100,7 +100,7 @@ Resources:
               Value: 
                 Fn::ImportValue: RDSEndpoint
             -
-              Name: "DB_USERNAME"
+              Name: "DB_USER"
               Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:username}}'
             -
               Name: "DB_PASSWORD"
@@ -109,11 +109,15 @@ Resources:
               Name: "DB_NAME"
               Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:db_name}}'
             -
-              Name: "AUTH_JWT_PRIVATE_KEY"
-              Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:private_key}}'
+              Name: "AUTH_ENDPOINT"
+              Value:
+                Fn::ImportValue: ALBEndpoint
             -
-              Name: "AUTH_JWT_PUBLIC_KEY"
-              Value: '{{resolve:secretsmanager:UtopiaSecretManager:SecretString:public_key}}'
+              Name: "AUTH_PORT"
+              Value: 8081
+            -
+              Name: "AUTH_SESSION"
+              Value: "api/session"
 
   bookingService:
     Type: AWS::ECS::Service
