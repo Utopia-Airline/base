@@ -149,10 +149,29 @@ def change_genders(passengers: dict):
     return passengers
 
 
-def generate_sql_statements(passengers: dict):
-    passenger = "INSERT INTO `utopia`.`passenger` (`id`, `booking_id`, `given_name`, `family_name`, `dob`, `gender`, `address`) VALUES ({0}, {1}, '{2}', '{3}', '{4}', '{5}', '{6}');"
-    for p in passengers.values():
-        print(passenger.format(p[0], p[1], p[2], p[3], p[4], p[5], p[6]))
+def generate_sql_statements(statement: str, dataDic={}):
+    if dataDic:
+        for item in dataDic.values():
+            args = [v for v in item]
+            print(statement.format(*args))
+            # print(statement.format(p[0], p[1], p[2], p[3], p[4], p[5], p[6]))
+
+
+def generate_route_sql_statements(statement: str, routes: dict):
+    j = 1
+    for _, r in routes.items():
+        print(statement.format(j, r[1], r[2]))
+        j += 1
+        print(statement.format(j, r[2], r[1]))
+        j += 1
+
+
+def combine_routes(routes: dict):
+    airports = set()
+    for _, r in routes.items():
+        airports.add(r[1])
+        airports.add(r[2])
+    return airports
 
 
 if __name__ == '__main__':
@@ -168,6 +187,12 @@ if __name__ == '__main__':
     # passengers = change_genders(passengers)
     # generate_report(passengers, 'passengers.txt')
 
+    # # generate sql statements
+    # passengers = get_table('passengers.txt')
+    # generate_sql_statements(passengers, "INSERT INTO `utopia`.`passenger` (`id`, `booking_id`, `given_name`, `family_name`, `dob`, `gender`, `address`) VALUES ({0}, {1}, '{2}', '{3}', '{4}', '{5}', '{6}');")
+
     # generate sql statements
-    passengers = get_table('passengers.txt')
-    generate_sql_statements(passengers)
+    routes = get_table('routes.txt')
+    generate_route_sql_statements(
+        "INSERT INTO `utopia`.`route` (`id`, `origin_id`, `destination_id`) VALUES ({0}, '{1}', '{2}');", routes)
+    print('===================================done===================================')
